@@ -68,8 +68,7 @@ LOG_SCHEMA = {
     'critic_confirmations':      list,
     'critic_context_notes':      list,
     'critic_tokens_used':        int,
-    'critic_raw_text':           str,
-}
+    'critic_raw_text':           str,    'formatted_signal_text':     str,}
 
 LOGS_PATH = os.path.join(os.getcwd(), 'logs')
 LOG_FILE = os.path.join(LOGS_PATH, 'decisions.jsonl')

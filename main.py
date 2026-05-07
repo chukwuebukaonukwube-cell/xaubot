@@ -200,6 +200,7 @@ def run_cycle(bot_state: BotState, trade_log: List[dict]) -> str:
         'critic_context_notes': critic_output.context_notes,
         'critic_tokens_used': critic_output.tokens_used,
         'critic_raw_text': critic_output.raw_critic_text,
+        'formatted_signal_text': signal_text,
     }
 
     log_cycle(log_entry)

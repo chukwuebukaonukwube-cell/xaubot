@@ -71,7 +71,8 @@ def test_log_cycle_writes_all_fields(tmp_path, monkeypatch):
         'critic_confirmations': [],
         'critic_context_notes': [],
         'critic_tokens_used': 0,
-        'critic_raw_text': ''
+        'critic_raw_text': '',
+        'formatted_signal_text': ''
     }
     log_cycle(entry)
     assert os.path.exists(str(tmp_path / 'decisions.jsonl'))

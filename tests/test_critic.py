@@ -9,6 +9,13 @@ def test_validate_critic_output_rejects_decision_language():
     assert 'should' in words
 
 
+def test_validate_critic_output_rejects_skip_language():
+    raw = 'The critic states you should skip this setup.'
+    bounded, words = validate_critic_output(raw)
+    assert not bounded
+    assert 'skip' in words
+
+
 def test_parse_critic_sections_returns_none_when_empty():
     raw = 'CONTRADICTIONS:\n\nCONFIRMATIONS:\n\nDRIFT AND PARITY FLAGS:\n\nCONTEXT NOTES:\n'
     contradictions, confirmations, drift_flags, context_notes = parse_critic_sections(raw)
