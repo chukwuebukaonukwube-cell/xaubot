@@ -56,46 +56,12 @@ def fetch_candles_twelvedata(symbol: str, interval: str, n_bars: int) -> pd.Data
     return df
 
 
-def fetch_candles_mt5(symbol: str, timeframe: str, n_bars: int) -> pd.DataFrame:
-    try:
-        import MetaTrader5 as mt5
-    except ImportError as exc:
-        raise RuntimeError('MetaTrader5 package is unavailable') from exc
-
-    if timeframe == '1H':
-        mt5_timeframe = mt5.TIMEFRAME_H1
-    elif timeframe == 'M15':
-        mt5_timeframe = mt5.TIMEFRAME_M15
-    else:
-        raise ValueError(f'Unsupported timeframe for MT5: {timeframe}')
-
-    if not mt5.initialize():
-        raise RuntimeError('MetaTrader5 initialization failed')
-
-    rates = mt5.copy_rates_from_pos('XAUUSD', mt5_timeframe, 0, n_bars)
-    mt5.shutdown()
-    if rates is None or len(rates) == 0:
-        raise RuntimeError('MT5 returned no candle data')
-
-    df = pd.DataFrame(rates)
-    df['timestamp'] = pd.to_datetime(df['time'], unit='s', utc=True)
-    df = df.rename(columns={
-        'open': 'open',
-        'high': 'high',
-        'low': 'low',
-        'close': 'close',
-        'real_volume': 'volume'
-    })
-    df = df.sort_values('timestamp').reset_index(drop=True)
-    return df[['timestamp', 'open', 'high', 'low', 'close', 'volume']]
-
-
 def get_candles(symbol: str, interval: str, n_bars: int) -> pd.DataFrame:
     try:
         return fetch_candles_twelvedata(symbol, interval, n_bars)
     except Exception as exc:
-        logger.warning('DATA SOURCE: Twelvedata failed — switched to MT5 bridge. %s', exc)
-        return fetch_candles_mt5(symbol, interval, n_bars)
+        logger.error('Twelvedata candle fetch failed: %s', exc)
+        raise RuntimeError('Unable to fetch candle data from Twelvedata. Ensure TWELVEDATA_API_KEY is set and the cloud environment has internet access.') from exc
 
 
 def load_parquet(path: str) -> pd.DataFrame:

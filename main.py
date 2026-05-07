@@ -76,7 +76,7 @@ def _should_call_critic(signal_type: str, drift_state: DriftState, parity_state:
     return False
 
 
-def run_cycle(bot_state: BotState, trade_log: List[dict]) -> str:
+def run_cycle(bot_state: BotState, trade_log: List[dict], return_metadata: bool = False):
     df_1h = _load_candle_file('candles/xauusd_1h.parquet', 'XAU/USD', '1h', 250)
     df_m15 = _load_candle_file('candles/xauusd_m15.parquet', 'XAU/USD', '15min', 500)
 
@@ -252,6 +252,8 @@ def run_cycle(bot_state: BotState, trade_log: List[dict]) -> str:
         if len(trade_log) >= 10:
             metrics = update_performance_metrics(trade_log)
             # Metrics are computed but not used by the deterministic engine.
+    if return_metadata:
+        return signal_text, log_entry
     return signal_text
 
 
