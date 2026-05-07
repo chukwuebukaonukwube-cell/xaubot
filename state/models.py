@@ -172,6 +172,10 @@ class BotState:
     e2_pending:          Optional[Edge2Signal] = None
     both_active:         bool = False
     combined_risk:       float = 0.0
+    regime_history:      List[RegimeState] = field(default_factory=list)
+    e1_reject_reason:    Optional[str] = None
+    e2_reject_reason:    Optional[str] = None
+    e2_oos_trade_count:  int = 0
     last_reset_date:     Optional[str] = None
 
 

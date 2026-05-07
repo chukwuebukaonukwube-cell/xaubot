@@ -13,7 +13,7 @@ from risk.engine import assess_risk
 from signals.output import format_signal
 from analytics.logger import log_cycle, update_performance_metrics
 from critic.layer import build_critic_context, call_critic
-from state.models import BotState, CriticOutput, ParityState, DriftState, ParityStatus, SignalType
+from state.models import BotState, CriticOutput, ParityState, DriftState, DriftSeverity, ParityStatus, SignalType
 
 
 def _load_candle_file(path: str, symbol: str, interval: str, n_bars: int):
@@ -31,9 +31,9 @@ def _initialize_bot_state() -> BotState:
 
 
 def _should_call_critic(signal_type: str, drift_state: DriftState, parity_state: ParityState) -> bool:
-    if drift_state.severity.value == 'ALERT':
+    if drift_state.severity != DriftSeverity.NONE and settings.CRITIC_CALL_ON_DRIFT_FLAG:
         return True
-    if parity_state.status.value == 'BREACH':
+    if parity_state.status == ParityStatus.BREACH:
         return True
     if signal_type == SignalType.TRADE.value:
         return True
@@ -57,7 +57,16 @@ def run_cycle(bot_state: BotState, trade_log: List[dict]) -> str:
     current_bar_m15 = len(df_m15) - 1
     current_datetime = df_1h.iloc[current_bar_1h]['timestamp']
 
+    if bot_state.last_reset_date != current_datetime.date().isoformat():
+        bot_state.e1_trades_today = 0
+        bot_state.e2_trades_today = 0
+        bot_state.last_reset_date = current_datetime.date().isoformat()
+
     regime = classify_regime(df_1h, current_bar_1h, current_datetime)
+    bot_state.regime = regime
+    if not bot_state.regime_history or bot_state.regime_history[-1].timestamp != regime.timestamp:
+        bot_state.regime_history.append(regime)
+
     compression_zones = detect_compression_zones(df_m15)
     e1_signal = detect_edge1(df_1h, current_bar_1h, regime, bot_state)
     e2_signal = detect_edge2(df_m15, current_bar_m15, regime, bot_state, compression_zones)
@@ -66,9 +75,12 @@ def run_cycle(bot_state: BotState, trade_log: List[dict]) -> str:
 
     risk_assessment = None
     if e1_signal:
+        bot_state.e1_trades_today += 1
         risk_assessment = assess_risk(e1_signal, bot_state)
-    elif e2_signal:
-        risk_assessment = assess_risk(e2_signal, bot_state)
+    if e2_signal:
+        bot_state.e2_trades_today += 1
+        if not risk_assessment:
+            risk_assessment = assess_risk(e2_signal, bot_state)
 
     if e1_signal or e2_signal:
         signal_type = SignalType.TRADE.value
@@ -100,9 +112,9 @@ def run_cycle(bot_state: BotState, trade_log: List[dict]) -> str:
         from parity.monitor import run_parity_check
         parity_state = run_parity_check(df_1h, df_m15, current_bar_1h, current_bar_m15, regime)
 
-    drift_state = detect_drift(trade_log, regime, df_1h, current_bar_1h)
+    drift_state = detect_drift(trade_log, regime, df_1h, current_bar_1h, bot_state.regime_history)
 
-    edge_source = 'EDGE 1' if e1_signal else 'EDGE 2' if e2_signal else 'NONE'
+    edge_source = 'BOTH' if e1_signal and e2_signal else 'EDGE 1' if e1_signal else 'EDGE 2' if e2_signal else 'NONE'
     critic_output = CriticOutput(
         timestamp=datetime.now(timezone.utc),
         critic_called=False,
@@ -171,6 +183,8 @@ def run_cycle(bot_state: BotState, trade_log: List[dict]) -> str:
         'edge_source': edge_source,
         'e2_oos_trade_count': getattr(bot_state, 'e2_oos_trade_count', 0),
         'phase11_caveat_active': bool(e2_signal and e2_signal.e2_short_suppressed),
+        'formatted_signal_text': signal_text,
+    }
         'drift_severity': drift_state.severity.value,
         'drift_flag_count': len(drift_state.active_flags),
         'drift_flag_types': [flag.flag_type for flag in drift_state.active_flags],

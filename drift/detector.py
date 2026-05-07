@@ -2,8 +2,9 @@
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 
-from state.models import DriftState, DriftFlag, DriftSeverity, RegimeState
 from config import settings
+from indicators.core import atr
+from state.models import DriftState, DriftFlag, DriftSeverity, RegimeState
 
 
 def _parse_timestamp(entry: Dict) -> Optional[datetime]:
@@ -51,7 +52,7 @@ def _count_trend_flips(trend_list: List[str]) -> int:
     return flips
 
 
-def detect_drift(trade_log: List[Dict], regime: RegimeState, df_1h, current_bar: int) -> DriftState:
+def detect_drift(trade_log: List[Dict], regime: RegimeState, df_1h, current_bar: int, regime_history: Optional[List[RegimeState]] = None) -> DriftState:
     e1_completed = [t for t in trade_log if t.get('edge_source') == 'EDGE1' and t.get('outcome') in ['WIN', 'LOSS', 'TIMEOUT']]
     e2_completed = [t for t in trade_log if t.get('edge_source') == 'EDGE2' and t.get('outcome') in ['WIN', 'LOSS', 'TIMEOUT']]
 
@@ -73,17 +74,15 @@ def detect_drift(trade_log: List[Dict], regime: RegimeState, df_1h, current_bar:
     e1_consecutive_losses = _count_consecutive_losses(e1_completed)
     e2_consecutive_losses = _count_consecutive_losses(e2_completed)
 
-    atr_history = df_1h['atr_1h'] if 'atr_1h' in df_1h.columns else df_1h['atr'] if 'atr' in df_1h.columns else None
-    if atr_history is not None:
-        atr_1h_mean_90d = atr_history.iloc[max(0, current_bar - 90): current_bar + 1].mean()
-    else:
-        atr_1h_mean_90d = regime.atr_1h
+    atr_series = atr(df_1h, 14)
+    atr_1h_mean_90d = atr_series.iloc[max(0, current_bar - 90): current_bar + 1].mean()
     atr_ratio = regime.atr_1h / atr_1h_mean_90d if atr_1h_mean_90d else 1.0
     volatility_outside_backtest = atr_ratio > settings.DRIFT_ATR_MULTIPLIER_HIGH or atr_ratio < settings.DRIFT_ATR_MULTIPLIER_LOW
 
+    regime_history = regime_history or []
     cutoff = regime.timestamp - timedelta(days=settings.DRIFT_REGIME_FLIP_WINDOW)
-    recent_regimes = [t for t in trade_log if _parse_timestamp(t) and _parse_timestamp(t) >= cutoff]
-    trend_states = [t.get('trend_1h') for t in recent_regimes if t.get('trend_1h')]
+    recent_regimes = [r for r in regime_history if r.timestamp >= cutoff]
+    trend_states = [r.trend_1h.value for r in recent_regimes if r.trend_1h]
     regime_flip_count_14d = _count_trend_flips(trend_states)
     regime_choppy = regime_flip_count_14d > settings.DRIFT_REGIME_FLIP_THRESHOLD
 
