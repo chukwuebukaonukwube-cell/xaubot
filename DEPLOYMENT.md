@@ -1,4 +1,4 @@
-# XAU/USD Trading Signal Engine v2.0 - Deployment Guide
+# XAU/USD Trading Signal Engine v2.0 - Deployment Guides
 
 ## Overview
 
